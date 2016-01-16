@@ -85,15 +85,7 @@ set __bobthefish_vagrant    48B4FB
 # Helper methods
 # ===========================
 
-# function __bobthefish_in_git -d 'Check whether pwd is inside a git repo'
-#   command which git > /dev/null 2>&1; and command git rev-parse --is-inside-work-tree >/dev/null 2>&1
-# end
-
-# function __bobthefish_in_hg -d 'Check whether pwd is inside a hg repo'
-#   command which hg > /dev/null 2>&1; and command hg stat > /dev/null 2>&1
-# end
-
-function __bobthefish_git_branch -d 'Get the current git branch (or commitish)'
+function __bobthefish_vcs_branch -d 'Get the current git branch (or commitish)'
   set -l ref (command git symbolic-ref HEAD ^/dev/null)
   if [ $status -gt 0 ]
     set -l branch (command git show-ref --head -s --abbrev | head -n1 ^/dev/null)
@@ -110,23 +102,6 @@ end
 
 function __bobthefish_pretty_parent -a current_dir -d 'Print a parent directory, shortened to fit the prompt'
   echo -n (dirname $current_dir) | sed -e 's#/private##' -e "s#^$HOME#~#" -e 's#/\(\.\{0,1\}[^/]\)\([^/]*\)#/\1#g' -e 's#/$##'
-end
-
-function __bobthefish_git_project_dir -d 'Print the current git project base directory'
-  [ "$theme_display_git" = 'no' ]; and return
-  command git rev-parse --show-toplevel ^/dev/null
-end
-
-function __bobthefish_hg_project_dir -d 'Print the current hg project base directory'
-  [ "$theme_display_hg" = 'yes' ]; or return
-  set d (pwd)
-  while not [ $d = / ]
-    if [ -e $d/.hg ]
-      command hg root --cwd "$d" ^/dev/null
-      return
-    end
-    set d (dirname $d)
-  end
 end
 
 function __bobthefish_project_pwd -a current_dir -d 'Print the working directory relative to project root'
@@ -320,6 +295,7 @@ function __bobthefish_prompt_user -d 'Display actual user if different from $def
 end
 
 function __bobthefish_prompt_hg -a current_dir -d 'Display the actual hg state'
+  [ "$theme_display_hg" = 'yes' ]; or return
   set -l dirty (command hg stat; or echo -n '*')
 
   set -l flags "$dirty"
@@ -354,6 +330,7 @@ function __bobthefish_prompt_hg -a current_dir -d 'Display the actual hg state'
 end
 
 function __bobthefish_prompt_git -a current_dir -d 'Display the actual git state'
+  [ "$theme_display_git" = 'no' ]; and return
   set -l dirty   (command git diff --no-ext-diff --quiet --exit-code; or echo -n '*')
   set -l staged  (command git diff --cached --no-ext-diff --quiet --exit-code; or echo -n '~')
   set -l stashed (command git rev-parse --verify --quiet refs/stash >/dev/null; and echo -n '$')
@@ -521,14 +498,16 @@ function fish_prompt -d 'bobthefish, a fish theme optimized for awesome'
   __bobthefish_prompt_rubies
   __bobthefish_prompt_virtualfish
 
-  set -l git_root (__bobthefish_git_project_dir)
-  set -l hg_root  (__bobthefish_hg_project_dir)
-  if [ (echo "$hg_root" | wc -c) -gt (echo "$git_root" | wc -c) ]
-    __bobthefish_prompt_hg $hg_root
-  else if [ "$git_root" ]
-    __bobthefish_prompt_git $git_root
-  else
+  if not test (set -l vcs_name (vcs.name))
     __bobthefish_prompt_dir
+  else
+    switch $vcs_name
+    case "git"
+      __bobthefish_prompt_git
+    case "hg"
+      __bobthefish_prompt_hg
+    end
   end
+
   __bobthefish_finish_segments
 end
